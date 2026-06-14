@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node Producer.js && node Consumer.js"
+    "start": "bash start.sh",
+    "producer": "node src/looger.producer.js",
+    "consumer": "node src/logger.consumer.js"
   },
   "keywords": [],
   "author": "fdhhhdjd",

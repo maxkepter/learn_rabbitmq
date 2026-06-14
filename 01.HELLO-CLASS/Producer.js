@@ -6,6 +6,7 @@ const config = require("./src/config");
 
 const producerMessage = async (message) => {
   try {
+    //
     const connection = await amqp.connect(config.rabbitMQ.url);
     const channel = await connection.createChannel();
 
@@ -15,9 +16,9 @@ const producerMessage = async (message) => {
       //* Queues
       queue,
       {
-        //* Not need save disk if docker stop lost data
-        durable: false,
-      }
+        //* Save queue to disk so it survives broker restarts
+        durable: true,
+      },
     );
 
     //* Send message
@@ -33,6 +34,10 @@ const producerMessage = async (message) => {
     console.error("Error:", error);
   }
 };
+
+console.log(
+  `Sending message to queue "${config.rabbitMQ.queues.helloClassQueue}"...`,
+);
 
 //* Send message
 producerMessage("Hello Class Tai");

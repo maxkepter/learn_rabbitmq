@@ -27,7 +27,7 @@ class RabbitMQClient {
         // Auto for rabbitMQ set name
         "",
         // Only connect a times, if connection this close it will delete queues
-        { exclusive: false }
+        { exclusive: false },
       );
 
       this.producer = new Producer(this.producerChannel, replyQueueName);

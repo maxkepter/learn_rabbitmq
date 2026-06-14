@@ -12,7 +12,7 @@ const createConsumer = async () => {
     const queue = config.rabbitMQ.queues.helloClassQueue;
 
     await channel.assertQueue(queue, {
-      durable: false,
+      durable: true,
     });
 
     //* Handle message received
@@ -22,15 +22,19 @@ const createConsumer = async () => {
         if (msg.content) {
           console.log(
             ` [x] Received message with queue "${queue}":`,
-            msg.content.toString()
+            msg.content.toString(),
           );
         }
       },
-      { noAck: true }
+      { noAck: true },
     );
   } catch (error) {
     console.error("Error:", error);
   }
 };
+
+console.log(
+  `Waiting for messages in queue "${config.rabbitMQ.queues.helloClassQueue}"...`,
+);
 
 createConsumer();

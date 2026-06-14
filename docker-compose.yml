@@ -5,11 +5,6 @@ services:
     image: rabbitmq:management
     container_name: rabbitmq
     restart: unless-stopped
-    environment:
-      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-}
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-}
     env_file:
       - .env
     ports:
