@@ -11,7 +11,7 @@ default:
 
 ############# BUILD #############
 run-build:
-	docker-compose -f $(DOCKER_COMPOSE) up -d --build
+	docker compose -f $(DOCKER_COMPOSE) up -d --build
 	
 run-down:
-	docker-compose -f $(DOCKER_COMPOSE) down
+	docker compose -f $(DOCKER_COMPOSE) down
