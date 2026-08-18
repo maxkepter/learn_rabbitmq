@@ -42,12 +42,16 @@ async function consumeMessages() {
         if (msg !== null) {
           try {
             const messageContent = msg.content.toString();
-            console.log(`Received: ${messageContent}`);
-            await saveToDataWarehouse(messageContent);
-
             // TODO: Extract the offset (deliveryTag) from the message and save it to offsetFilePath
-            offset = msg.fields.deliveryTag;
-            fs.writeFileSync(offsetFilePath, offset.toString(), "utf8");
+            const streamOffset = msg.properties.headers["x-stream-offset"];
+
+            if (streamOffset >= offset) {
+              console.log(`Received: ${messageContent}`);
+              await saveToDataWarehouse(messageContent);
+              fs.writeFileSync(offsetFilePath, streamOffset.toString(), "utf8");
+            } else {
+              console.log(`Blocked: ${messageContent}`);
+            }
 
             channel.ack(msg);
           } catch (error) {
@@ -57,8 +61,11 @@ async function consumeMessages() {
       },
       {
         noAck: false,
+        arguments: {
+          "x-stream-offset": offset,
+        },
         // TODO: Pass the stream offset argument here
-      }
+      },
     );
 
     console.log("Waiting for messages.");
