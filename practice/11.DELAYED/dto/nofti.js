@@ -4,7 +4,7 @@ class Noftication {
     subject,
     message,
     retryCount = 0,
-    scheduledAt = new Date().toISOString()
+    scheduledAt = new Date().toISOString(),
   ) {
     this.email = email;
     this.subject = subject;
@@ -43,7 +43,7 @@ class Noftication {
       data.subject,
       data.message,
       data.retryCount ?? 0,
-      data.scheduledAt ?? new Date().toISOString()
+      data.scheduledAt ?? new Date().toISOString(),
     );
   }
 

@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bài tập nâng cao RabbitMQ - Hẹn giờ + DLX + Retry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-slate-900 text-slate-100 min-h-screen py-10 px-4 antialiased">
+    <div class="max-w-4xl mx-auto space-y-8">
+      <!-- Header -->
+      <header class="text-center pb-8 border-b border-slate-800">
+        <h1
+          class="text-3xl sm:text-4xl font-extrabold text-sky-400 tracking-tight mb-2"
+        >
+          Bài tập nâng cao RabbitMQ
+        </h1>
+        <p class="text-slate-400 text-base sm:text-lg">
+          Hẹn giờ (Delayed) + Dead Letter Exchange (DLX) + Retry Pattern
+        </p>
+      </header>
+
+      <!-- 1. Mục tiêu -->
+      <section
+        class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur"
+      >
+        <h2 class="text-xl font-bold text-sky-400 flex items-center gap-2 mb-3">
+          <span>🎯</span> 1. Mục tiêu
+        </h2>
+        <p class="text-slate-300 mb-4">
+          Xây dựng một hệ thống gửi thông báo theo lịch hẹn bằng RabbitMQ, áp
+          dụng các kỹ thuật cốt lõi:
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >TTL (Time-To-Live)</span
+          >
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >Dead Letter Exchange (DLX)</span
+          >
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >Direct Exchange</span
+          >
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >Queue Binding</span
+          >
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >Consumer Acknowledgment</span
+          >
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >Retry Logic</span
+          >
+          <span
+            class="px-3 py-1 bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm font-medium rounded-full"
+            >Structured Logging</span
+          >
+        </div>
+      </section>
+
+      <!-- 2. Tổng quan bài toán -->
+      <section
+        class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur"
+      >
+        <h2 class="text-xl font-bold text-sky-400 flex items-center gap-2 mb-3">
+          <span>📋</span> 2. Tổng quan bài toán
+        </h2>
+        <p class="text-slate-300 mb-4">
+          Xây dựng hệ thống gửi email nhắc nhở hoặc thông báo theo thời gian chờ
+          với luồng xử lý sau:
+        </p>
+        <ol class="list-decimal list-inside space-y-2 text-slate-300">
+          <li>
+            <strong class="text-slate-100">Producer:</strong> Tạo message chứa
+            thông tin người nhận, tiêu đề, nội dung, thời gian chờ.
+          </li>
+          <li>
+            <strong class="text-slate-100">Queue tạm (TTL):</strong> Message
+            được đưa vào queue tạm thời có cài đặt TTL.
+          </li>
+          <li>
+            <strong class="text-slate-100">Dead-lettering:</strong> Sau khi TTL
+            hết hạn, RabbitMQ tự động chuyển message sang Exchange chính.
+          </li>
+          <li>
+            <strong class="text-slate-100">Routing:</strong> Exchange định tuyến
+            message sang queue đích.
+          </li>
+          <li>
+            <strong class="text-slate-100">Consumer:</strong> Đọc message từ
+            queue đích, xử lý nội dung và ghi log.
+          </li>
+          <li>
+            <strong class="text-slate-100">Retry/DLQ:</strong> Nếu xử lý thất
+            bại, message được đưa vào hàng đợi Retry hoặc Dead Letter Queue.
+          </li>
+        </ol>
+      </section>
+
+      <!-- 3. Yêu cầu kỹ thuật -->
+      <section
+        class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur space-y-6"
+      >
+        <h2 class="text-xl font-bold text-sky-400 flex items-center gap-2">
+          <span>⚙️</span> 3. Yêu cầu kỹ thuật
+        </h2>
+
+        <!-- Topology Table -->
+        <div>
+          <h3 class="text-base font-semibold text-slate-200 mb-3">
+            Topology RabbitMQ
+          </h3>
+          <div class="overflow-x-auto rounded-lg border border-slate-700">
+            <table class="w-full text-left text-sm text-slate-300">
+              <thead class="bg-slate-900/80 text-sky-400 uppercase text-xs">
+                <tr>
+                  <th class="px-4 py-3 border-b border-slate-700">
+                    Thành phần
+                  </th>
+                  <th class="px-4 py-3 border-b border-slate-700">Tên</th>
+                  <th class="px-4 py-3 border-b border-slate-700">
+                    Cấu hình / Thuộc tính
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-700">
+                <tr class="hover:bg-slate-750">
+                  <td class="px-4 py-3 font-medium text-slate-200">Exchange</td>
+                  <td class="px-4 py-3 font-mono text-sky-300">
+                    main_exchange
+                  </td>
+                  <td class="px-4 py-3">
+                    Type:
+                    <code
+                      class="bg-slate-900 text-sky-300 px-1.5 py-0.5 rounded font-mono text-xs"
+                      >direct</code
+                    >,
+                    <code
+                      class="bg-slate-900 text-sky-300 px-1.5 py-0.5 rounded font-mono text-xs"
+                      >durable: true</code
+                    >
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-750 bg-slate-800/40">
+                  <td class="px-4 py-3 font-medium text-slate-200">
+                    Queue gốc (Delay)
+                  </td>
+                  <td class="px-4 py-3 font-mono text-sky-300">
+                    delay_queue_10s
+                  </td>
+                  <td
+                    class="px-4 py-3 space-y-1 font-mono text-xs text-slate-300"
+                  >
+                    <div><code>durable: true</code></div>
+                    <div><code>x-message-ttl: 10000</code></div>
+                    <div>
+                      <code>x-dead-letter-exchange: "main_exchange"</code>
+                    </div>
+                    <div><code>x-dead-letter-routing-key: "go"</code></div>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-750">
+                  <td class="px-4 py-3 font-medium text-slate-200">
+                    Queue đích
+                  </td>
+                  <td class="px-4 py-3 font-mono text-sky-300">
+                    delayed_target_queue
+                  </td>
+                  <td class="px-4 py-3 font-mono text-xs text-slate-300">
+                    <div><code>durable: true</code></div>
+                    <div>
+                      Binding: <code>main_exchange</code> (routing key:
+                      <code>go</code>)
+                    </div>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-750 bg-slate-800/40">
+                  <td class="px-4 py-3 font-medium text-slate-200">
+                    Queue Retry
+                  </td>
+                  <td class="px-4 py-3 font-mono text-sky-300">retry_queue</td>
+                  <td
+                    class="px-4 py-3 space-y-1 font-mono text-xs text-slate-300"
+                  >
+                    <div><code>durable: true</code></div>
+                    <div><code>x-message-ttl: 5000</code></div>
+                    <div>
+                      <code>x-dead-letter-exchange: "main_exchange"</code>
+                    </div>
+                    <div><code>x-dead-letter-routing-key: "go"</code></div>
+                  </td>
+                </tr>
+                <tr class="hover:bg-slate-750">
+                  <td class="px-4 py-3 font-medium text-slate-200">
+                    Queue Dead-Letter
+                  </td>
+                  <td class="px-4 py-3 font-mono text-sky-300">
+                    dead_letter_queue
+                  </td>
+                  <td class="px-4 py-3 font-mono text-xs text-slate-300">
+                    <code>durable: true</code> (Lưu message lỗi vĩnh viễn)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Producer -->
+        <div>
+          <h3 class="text-base font-semibold text-slate-200 mb-2">
+            Producer:
+            <code
+              class="text-sky-400 bg-slate-900 px-2 py-0.5 rounded font-mono text-sm"
+              >delay_send.js</code
+            >
+          </h3>
+          <ul
+            class="list-disc list-inside space-y-1 text-slate-300 text-sm mb-3"
+          >
+            <li>Kết nối RabbitMQ qua biến môi trường.</li>
+            <li>
+              Gửi ít nhất
+              <strong class="text-slate-100">3 message khác nhau</strong> vào
+              <code>delay_queue_10s</code>.
+            </li>
+            <li>
+              Cấu hình message:
+              <code
+                class="bg-slate-900 text-sky-300 px-1 py-0.5 rounded font-mono text-xs"
+                >persistent: true</code
+              >.
+            </li>
+            <li>Ghi log: thời gian gửi, payload, queue đích.</li>
+          </ul>
+          <pre
+            class="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs sm:text-sm text-slate-200 overflow-x-auto"
+          ><code>{
+  "email": "customer@example.com",
+  "subject": "Thông báo nhắc nhở",
+  "message": "Bạn có một công việc sắp đến hạn.",
+  "retryCount": 0,
+  "scheduledAt": "2026-08-19T10:00:00.000Z"
+}</code></pre>
+        </div>
+
+        <!-- Consumer -->
+        <div>
+          <h3 class="text-base font-semibold text-slate-200 mb-2">
+            Consumer:
+            <code
+              class="text-sky-400 bg-slate-900 px-2 py-0.5 rounded font-mono text-sm"
+              >delay_consume.js</code
+            >
+          </h3>
+          <ul class="list-disc list-inside space-y-1 text-slate-300 text-sm">
+            <li>
+              Lắng nghe queue
+              <code
+                class="bg-slate-900 text-sky-300 px-1.5 py-0.5 rounded font-mono text-xs"
+                >delayed_target_queue</code
+              >.
+            </li>
+            <li>
+              Parse payload JSON, hiển thị thời gian nhận, thông tin email, tiêu
+              đề, nội dung.
+            </li>
+            <li>
+              Giả lập các tình huống:
+              <ul
+                class="list-circle list-inside pl-6 mt-1 space-y-1 text-slate-400"
+              >
+                <li>
+                  <strong class="text-emerald-400">Thành công:</strong> gọi
+                  <code
+                    class="bg-slate-900 text-sky-300 px-1 py-0.5 rounded font-mono text-xs"
+                    >ack()</code
+                  >
+                </li>
+                <li>
+                  <strong class="text-rose-400">Thất bại:</strong> gọi
+                  <code
+                    class="bg-slate-900 text-sky-300 px-1 py-0.5 rounded font-mono text-xs"
+                    >nack()</code
+                  >
+                  /
+                  <code
+                    class="bg-slate-900 text-sky-300 px-1 py-0.5 rounded font-mono text-xs"
+                    >reject()</code
+                  >
+                  hoặc chuyển queue
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Retry Logic Box -->
+        <div
+          class="border-l-4 border-amber-500 bg-amber-500/10 rounded-r-lg p-4 space-y-1 text-sm text-amber-200"
+        >
+          <p class="font-semibold text-amber-300">Cơ chế Retry Logic:</p>
+          <p>
+            • Nếu <code>retryCount &lt; 3</code>: Tăng
+            <code>retryCount</code> lên 1 và đẩy vào
+            <code>retry_queue</code> (TTL 5s sau đó dead-letter lại về queue
+            đích).
+          </p>
+          <p>
+            • Nếu <code>retryCount &gt;= 3</code>: Đẩy vào
+            <code>dead_letter_queue</code> để lưu trữ vĩnh viễn và dừng retry.
+          </p>
+        </div>
+      </section>
+
+      <!-- 4. Expected Output -->
+      <section
+        class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur"
+      >
+        <h2 class="text-xl font-bold text-sky-400 flex items-center gap-2 mb-3">
+          <span>🖥️</span> 4. Kết quả mong đợi (Expected Output)
+        </h2>
+        <pre
+          class="bg-slate-950 border border-slate-800 rounded-lg p-4 font-mono text-xs sm:text-sm text-emerald-400 overflow-x-auto leading-relaxed"
+        ><code>[Producer] Sent message to delay_queue_10s at 2026-08-19T10:00:00.000Z
+[Consumer] Received message from delayed_target_queue at 2026-08-19T10:00:10.200Z
+[Consumer] Processing email: customer@example.com
+[Consumer] Retry attempt 1 for customer@example.com
+[Queue] Message moved to retry_queue
+[Consumer] Retry received after 5s
+[Consumer] Message processed successfully</code></pre>
+      </section>
+
+      <!-- 5. Files -->
+      <section
+        class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur"
+      >
+        <h2 class="text-xl font-bold text-sky-400 flex items-center gap-2 mb-3">
+          <span>📁</span> 5. Gợi ý cấu trúc file
+        </h2>
+        <ul class="space-y-2 text-sm text-slate-300">
+          <li class="flex items-center gap-2">
+            <code class="bg-slate-950 text-sky-400 px-2 py-1 rounded font-mono"
+              >delay_setup.js</code
+            >
+            <span>— Khởi tạo topology (exchanges, queues, bindings)</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <code class="bg-slate-950 text-sky-400 px-2 py-1 rounded font-mono"
+              >delay_send.js</code
+            >
+            <span>— Producer gửi message</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <code class="bg-slate-950 text-sky-400 px-2 py-1 rounded font-mono"
+              >delay_consume.js</code
+            >
+            <span>— Consumer xử lý retry & dead-letter</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <code class="bg-slate-950 text-sky-400 px-2 py-1 rounded font-mono"
+              >.env</code
+            >
+            <span
+              >— Biến môi trường kết nối (<code>RABBITMQ_URI=...</code>)</span
+            >
+          </li>
+          <li class="flex items-center gap-2">
+            <code class="bg-slate-950 text-sky-400 px-2 py-1 rounded font-mono"
+              >EXERCISE.html</code
+            >
+            <span>— Tài liệu đề bài HTML với Tailwind CSS</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- 6. Evaluation -->
+      <section
+        class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-6 shadow-xl backdrop-blur"
+      >
+        <h2 class="text-xl font-bold text-sky-400 flex items-center gap-2 mb-3">
+          <span>✅</span> 6. Tiêu chí hoàn thành
+        </h2>
+        <div
+          class="border-l-4 border-emerald-500 bg-emerald-500/10 rounded-r-lg p-4 space-y-2 text-sm text-emerald-200"
+        >
+          <p>✔ Chạy thành công trên môi trường RabbitMQ.</p>
+          <p>✔ Thiết lập đúng topology exchange / queue / binding.</p>
+          <p>✔ TTL & Dead Lettering hoạt động chính xác.</p>
+          <p>
+            ✔ Consumer log rõ ràng các trạng thái: sent / received / retry /
+            failed / dead-letter.
+          </p>
+          <p>✔ Mã nguồn sạch sẽ, tách biệt rõ vai trò producer và consumer.</p>
+        </div>
+      </section>
+
+      <footer
+        class="text-center text-slate-500 text-xs py-4 border-t border-slate-800"
+      >
+        RabbitMQ Practice Guide &bull; 2026
+      </footer>
+    </div>
+  </body>
+</html>
